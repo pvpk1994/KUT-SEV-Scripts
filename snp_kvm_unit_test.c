@@ -6,16 +6,8 @@
 #include <x86/processor.h>
 #include <x86/vm.h>
 
-/* APM Vol:3 */ 
-#define CPUID_FN_LARGEST_EXT_FUNC_NUM 	0x80000000
-#define CPUID_FN_ENCRYPT_MEM_CAPABILITY 0x8000001F
-#define SEV_SUPPORT_BIT					0b10
-
-/* APM Vol:2 */
-#define SEV_ENABLE_MSR					0xc0010010
-#define SEV_ENABLE_BIT					0b01
-#define SEV_ES_ENABLE_BIT				0b10 // Bit 2
-#define SEV_SNP_ENABLE_BIT				0b100 // Bit 3
+/* Global Variable(s) */
+static unsigned short amd_sev_c_bit_pos;
 
 /* Step-1: Query SEV features 
  * Step-2: Check if SEV is supported
@@ -57,8 +49,7 @@ typedef unsigned long efi_status_t;
 efi_status_t setup_amd_sev(void)
 {
 	struct cpuid cpuid_output;
-	static unsigned short amd_sev_c_bit_pos;
-
+	
 	/* If SEV is disabled: EFI NOT SUPPORTED */
 	if (!amd_sev_is_enabled)
 		return EFI_UNSUPPORTED;
@@ -69,6 +60,16 @@ efi_status_t setup_amd_sev(void)
 
 	return EFI_SUCCESS;
 }
+
+/* Having obtained C bit pos; now get the Bit mask of it */
+unsigned long long get_amd_bit_mask(void)
+{
+	if (amd_sev_is_enabled())
+		return 1ull << amd_sev_c_bit_pos;
+	else
+		return 0;
+}
+
 
 /* AMD SEV-ES Support for KVM-unit-tests */
 bool amd_sev_es_enabled(void)
@@ -95,4 +96,8 @@ bool amd_sev_es_enabled(void)
 	}
 	return sev_es_enabled;
 }
+
+/* Setup AMD SEV-ES For KVM-unit-tests (Part of a different Patch) */ 
+efi_status_t setup_amd_sev_es(void)
+{}
 
