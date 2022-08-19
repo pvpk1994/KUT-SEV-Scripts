@@ -13,6 +13,12 @@ static int test_sev_activation(void)
 	return EXIT_SUCCESS;
 }
 
+/* QEMU build for this to work:
+ * qemu/build/qemu-system-x86_64 \
+ *		-object sev-guest, id=sev0, cbitpos=47, reduced-phys-bits=1, policy=0x3,
+ *		-memory-encryption=sev0 --cpu EPYC-Milan
+ * SEV-specific magic-flags only mentioned here. 
+ */
 int main(void)
 {
 	int rtn;
