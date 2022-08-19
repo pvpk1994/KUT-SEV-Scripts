@@ -1,3 +1,5 @@
+/* Header file location: /kvm-unit-tests/lib/x86/amd-sev.h
+
 #ifndef _X86_AMD_SEV_H_
 #define _X86_AMD_SEV_H_
 
