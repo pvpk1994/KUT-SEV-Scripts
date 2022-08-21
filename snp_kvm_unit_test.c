@@ -6,6 +6,20 @@
 #include <x86/processor.h>
 #include <x86/vm.h>
 
+#define PT_ADDR_UPPER_BOUND_DEFAULT 51
+
+/* If UEFI is enabled */
+#ifdef TARGET_EFI
+#define PT_ADDR_UPPER_BOUND 	(get_amd_sev_addr_upperbound())
+#else
+#define PT_ADDR_UPPER_BOUND 	(PT_ADDR_UPPER_BOUND_DEFAULT)
+#endif /* TARGET_EFI */
+
+#define PT_ADDR_LOWER_BOUND		    (PAGE_SHIFT) /* 12 for PAGE_SIZE 4k in x-86 */
+
+/* GENMASK_ULL(high, low) - sets address bits in between this range specified */
+#define PT_ADDR_MASK				GENMASK_ULL(PT_ADDR_UPPER_BOUND, PT_ADDR_LOWER_BOUND)
+
 /* Global Variable(s) */
 static unsigned short amd_sev_c_bit_pos;
 
@@ -62,7 +76,7 @@ efi_status_t setup_amd_sev(void)
 }
 
 /* Having obtained C bit pos; now get the Bit mask of it */
-unsigned long long get_amd_bit_mask(void)
+unsigned long long get_amd_c_bit_mask(void)
 {
 	if (amd_sev_is_enabled())
 		return 1ull << amd_sev_c_bit_pos;
@@ -95,6 +109,17 @@ bool amd_sev_es_enabled(void)
 			sev_es_enabled = true;
 	}
 	return sev_es_enabled;
+}
+
+/* If AMD-SEV is enabled, upperbound of guest physical address is c_bit_pos-1
+ * However, if AMD-SEV is not enabled, then upperbound of GPA is 51
+ */
+unsigned long long get_amd_sev_addr_upperbound(void)
+{
+	if (amd_sev_is_enabled())
+		return amd_sev_c_bit_pos-1;
+	else
+		return PT_ADDR_UPPER_BOUND_DEFAULT
 }
 
 /* Setup AMD SEV-ES For KVM-unit-tests (Part of a different Patch) */ 

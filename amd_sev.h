@@ -25,7 +25,8 @@
 bool amd_sev_is_enabled(void);
 efi_status_t setup_amd_sev(void);
 
-unsigned long long get_amd_bit_mask(void);
+unsigned long long get_amd_c_bit_mask(void);
+unsigned long long get_amd_sev_addr_upperbound(void);
 
 #endif // TARGET_EFI
 #endif // _X86_AMD_SEV_H_
