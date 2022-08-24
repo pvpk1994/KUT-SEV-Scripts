@@ -20,6 +20,9 @@
 /* GENMASK_ULL(high, low) - sets address bits in between this range specified */
 #define PT_ADDR_MASK				GENMASK_ULL(PT_ADDR_UPPER_BOUND, PT_ADDR_LOWER_BOUND)
 
+/* APM Vol-2 - Section #VC exception */
+#define SEV_ES_VC_HANDLER_VECTOR	29
+
 /* Global Variable(s) */
 static unsigned short amd_sev_c_bit_pos;
 
@@ -124,5 +127,33 @@ unsigned long long get_amd_sev_addr_upperbound(void)
 
 /* Setup AMD SEV-ES For KVM-unit-tests (Part of a different Patch) */ 
 efi_status_t setup_amd_sev_es(void)
-{}
+{
+	/* This is same as struct idt_ptr_struct in x86 */
+	/* This struct defines a ptr to an array of interrupt handlers */
+	struct descriptor_table_ptr idtr; 
+	idt_entry_t *idt; // Pointer to IDT entry
+	idt_entry_t vc_handler_idt;
+
+	// Check if AMD-SEV is enabled
+	if (!amd_sev_is_enabled())
+		return EFI_UNSUPPORTED;
+
+	/* Copy UEFI's #VC IDT entry so that KVM unit tests can reuse it and does not have
+	 * to re-implement a #VC handler. While at it, update the #VC IDT code segment to
+	 * use KVM-unit-tests segments, KERNEL_CS, so that we do not have to copy the UEFI
+	 * GDT entries to KVM-unit-tests GDT.
+	 */
+	sidt(&idtr); // sidt is supposed to store contents of GDTR/IDT register in dest operand
+	// Then UEFI's register val is being stored in idtr variable here. 
+
+	idt = (idt_entry_t *)idtr.base; // idtr.base is the 1st element in idt_entry_t array
+	vc_handler_idt = idt[SEV_ES_VC_HANDLER_VECTOR]; // get the #VC IR handler of UEFI
+	vc_handler_idt.selector = KERNEL_CS; // get the IDT code segment
+
+	boot_idt[SEV_ES_VC_HANDLER_VECTOR] = vc_handler_idt; // I think this is where it is 
+	// getting copied into KVM-Unit-Test's IDT entry.
+
+	// After copying, return success
+	return EFI_SUCCESS;
+}
 
