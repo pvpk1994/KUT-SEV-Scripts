@@ -22,6 +22,7 @@
 
 /* APM Vol-2 - Section #VC exception */
 #define SEV_ES_VC_HANDLER_VECTOR	29
+#define SEV_ES_GHCB_MSR_INDEX		0xc0010130
 
 /* Global Variable(s) */
 static unsigned short amd_sev_c_bit_pos;
@@ -66,7 +67,7 @@ typedef unsigned long efi_status_t;
 efi_status_t setup_amd_sev(void)
 {
 	struct cpuid cpuid_output;
-	
+
 	/* If SEV is disabled: EFI NOT SUPPORTED */
 	if (!amd_sev_is_enabled)
 		return EFI_UNSUPPORTED;
@@ -157,3 +158,51 @@ efi_status_t setup_amd_sev_es(void)
 	return EFI_SUCCESS;
 }
 
+/* SEV-ES introduces GHCB to conduct guest-hypervisor communication. This GHCB page must be
+ * unencrypted (i.e., c-bit=0 / unset). Otherwise, guest VM will crash on #VC exception.
+
+ * By default, KVM-unit-tests only support 2MiB pages, i.e., only level-2 PTE's are supported.
+ * Unsetting GHCB level-2 pte's c-bit will still crash the guest. Therefore solution is to unset
+ * level-1 pte's c-bit.
+
+ * Steps:
+ * 1. Finds GHCB level-1 PTE's.
+ * 2. If none found, install level-1 pages.
+ * 3. Unset GHCB level-1 PTE's c-bit.
+ */
+void setup_ghcb_pte(pgd_t *page_table)
+{
+	phys_addr_t ghcb_addr, ghcb_base_addr;
+	pteval_t *pte;
+
+	/* Read the GHCB page address @ C001_0130 */
+	ghcb_addr = rdmsr(SEV_ES_GHCB_MSR_INDEX);
+
+	/* Now search for level-1 PTE for obtained GHCB page */
+	pte = get_pte_level(page_table, (void *)ghcb_addr, 1); // level-1
+
+	/* If none level-1 PTEs found */
+	if (pte == NULL) {
+
+		/* Step-2: Install level-1 pages */
+		/* For that, find level-2 page base addr */
+		/* https://stackoverflow.com/questions/3023909/what-is-the-trick-in-paddress-page-size-1-to-get-the-pages-base-address */
+		ghcb_base_addr = ghcb_addr & (LARGE_PAGE_SIZE -1);
+
+		/* Install level-1 PTE's now */
+		install_pages(page_table, ghcb_base_addr, LARGE_PAGE_SIZE, (void *)ghcb_base_addr);
+
+		/* Find Level-2 pte, set as 4KB pages */
+		pte = get_pte_level(page_table, (void *)ghcb_addr, 2);
+
+		assert(pte);
+		*pte = *pte & ~(PT_PAGE_SIZE_MASK); // (1ULL << 7)
+
+		/* Find level-1 GHCB pte */
+		pte = get_pte_level(page_table, (void*)ghcb_addr, 1);
+		assert(pte);
+	}
+
+	/* Step-3: Unset c-bit in level-1 GHCB pte */
+	*pte = *pte & ~(get_amd_c_bit_mask());
+}
