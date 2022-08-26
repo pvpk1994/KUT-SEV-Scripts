@@ -5,7 +5,6 @@
 
 /* Target EFI should have been setup by now */
 #ifdef TARGET_EFI
-
 #include "libcflat.h"
 #include "desc.h"
 #include "asm/page.h"

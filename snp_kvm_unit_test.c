@@ -144,7 +144,7 @@ efi_status_t setup_amd_sev_es(void)
 	 * use KVM-unit-tests segments, KERNEL_CS, so that we do not have to copy the UEFI
 	 * GDT entries to KVM-unit-tests GDT.
 	 */
-	sidt(&idtr); // sidt is supposed to store contents of GDTR/IDT register in dest operand
+v	sidt(&idtr); // sidt is supposed to store contents of GDTR/IDT register in dest operand
 	// Then UEFI's register val is being stored in idtr variable here. 
 
 	idt = (idt_entry_t *)idtr.base; // idtr.base is the 1st element in idt_entry_t array
