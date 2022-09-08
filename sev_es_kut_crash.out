@@ -1,0 +1,15 @@
+qemu-system-x86-29871   [139] ..... 308299.584908: kvm_vmgexit_enter: vcpu 0, exit_reason 80000001, exit_info1 fee00020, exit_info2 4 # Exit reason 80000001 corresponds to MMIO READ in GHCB spec
+qemu-system-x86-29871   [139] ..... 308299.584909: kvm_apic: apic_read APIC_ID = 0x0
+qemu-system-x86-29871   [139] ..... 308299.584910: kvm_mmio: mmio read len 4 gpa 0xfee00020 val 0x0 # guest tries to do an MMIO read of GPA, KVM might think this is APIC register. 
+qemu-system-x86-29871   [139] ...1. 308299.584910: kvm_sev_es_unmap_ghcb: ghcb_sa_hva ffff954100d26f80, ghcb_gpa 000000000fef2800, ghcb_sa_len 0x4, ghcb_sa_alloc_len 0x38, ghcb_sa_sync 1, ghcb_in_use 1, ghcb_>
+qemu-system-x86-29871   [139] ...1. 308299.584910: kvm_vmgexit_exit: vcpu 0, exit_reason 80000001, exit_info1 0, exit_info2 0 # Exit reason 80000001 corresponds to MMIO read in GHCB spec
+qemu-system-x86-29871   [139] d..1. 308299.584910: kvm_entry: vcpu 0, rip 0x0
+qemu-system-x86-29871   [139] ..... 308299.584913: kvm_exit: vcpu 0 reason write_cr0_trap rip 0x0 info1 0x0000000080010033 info2 0x0000000000000000 intr_info 0x00000000 error_code 0x00000000
+qemu-system-x86-29871   [139] ...1. 308299.584913: kvm_sev_es_unmap_ghcb: ghcb_sa_hva ffff954100d26f80, ghcb_gpa 000000000fef2800, ghcb_sa_len 0x4, ghcb_sa_alloc_len 0x38, ghcb_sa_sync 0, ghcb_in_use 0, ghcb_>
+qemu-system-x86-29871   [139] d..1. 308299.584913: kvm_entry: vcpu 0, rip 0x0
+qemu-system-x86-29871   [139] ..... 308299.584916: kvm_exit: vcpu 0 reason write_cr4_trap rip 0x0 info1 0x0000000000000668 info2 0x0000000000000000 intr_info 0x00000000 error_code 0x00000000
+qemu-system-x86-29871   [139] ...1. 308299.584916: kvm_sev_es_unmap_ghcb: ghcb_sa_hva ffff954100d26f80, ghcb_gpa 000000000fef2800, ghcb_sa_len 0x4, ghcb_sa_alloc_len 0x38, ghcb_sa_sync 0, ghcb_in_use 0, ghcb_>
+qemu-system-x86-29871   [139] d..1. 308299.584917: kvm_entry: vcpu 0, rip 0x0
+qemu-system-x86-29871   [139] ..... 308299.584920: kvm_exit: vcpu 0 reason shutdown rip 0x0 info1 0x0000000000000000 info2 0x0000000000000000 intr_info 0x80000b08 error_code 0x00000000
+qemu-system-x86-29871   [139] ..... 308299.584921: kvm_fpu: unload
+qemu-system-x86-29871   [139] ..... 308299.584921: kvm_userspace_exit: reason error (22) # QEMU crashing here (reason error 22)
