@@ -207,42 +207,5 @@ void setup_ghcb_pte(pgd_t *page_table)
 	*pte = *pte & ~(get_amd_c_bit_mask());
 }
 
-/* Before this patch update (below), SEV-ES guest crash when executing 'lgdt' instruction.
- * This is because lgdt triggers UEFI procedures (Ex: UEFI #VC handler) that requires UEFI
- * code and data segments. But these segments are not compatible with KUT's GDT:
- * UEFI uses 0x30 as CS and 0x38 as data segment, but in KUT's GDT: 0x30 is data segment
- * and 0x38 is a code segment. This discrepancy crashes the UEFI procedure and crashes the lgdt
- * execution.
-
- * Solution: copy UEFI GDT's code and data segments inot KUT's GDT, so UEFI procedures can work..
- */
-
-static void copy_gdt_entry(gdt_entry_t *dst, gdt_entry_t *src, unsigned segment)
-{
-        unsigned index;
-
-        index = segment / sizeof(gdt_entry_t);
-        dst[index] = src[index];
-}
-
-/* Defined in x86/efi/efistart64.S */
-extern gdt_entry_t gdt64[];
-
-void copy_uefi_segments(void)
-{
-        if (!amd_sev_es_enabled()) {
-                return;
-	}
-
-        /* GDT & GDTR in current UEFI */
-        gdt_entry_t *gdt_curr;
-        struct descriptor_table_ptr gdtr_curr;
-
-        /* Copy code and data segments from UEFI */
-        sgdt(&gdtr_curr);
-        gdt_curr = (gdt_entry_t *)gdtr_curr.base;
-        copy_gdt_entry(gdt64, gdt_curr, read_cs());
-        copy_gdt_entry(gdt64, gdt_curr, read_ds());
-}
 
 
