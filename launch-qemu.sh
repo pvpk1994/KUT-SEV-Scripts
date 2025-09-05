@@ -9,7 +9,6 @@ SMP="4"
 VNC=""
 CONSOLE="serial"
 USE_VIRTIO="1"
-DISCARD="none"
 USE_DEFAULT_NETWORK="0"
 CPU_MODEL="EPYC-v4"
 MONITOR_PATH=monitor
@@ -17,11 +16,11 @@ QEMU_CONSOLE_LOG=`pwd`/stdout.log
 CERTS_PATH=
 
 
-SEV="0"
-SEV_ES="0"
-SEV_SNP="0"
-ALLOW_DEBUG="0"
-USE_GDB="0"
+SEV=
+SEV_ES=
+SEV_SNP=
+ALLOW_DEBUG=
+DRY=
 
 EXEC_PATH="./usr/local"
 UEFI_PATH="$EXEC_PATH/share/qemu"
@@ -32,7 +31,6 @@ usage() {
 	echo " -sev               launch SEV guest"
 	echo " -sev-es            launch SEV guest"
 	echo " -sev-snp           launch SNP guest"
-	echo " -enable-discard    for SNP, discard memory after conversion. (worse boot-time performance, but less memory usage)"
 	echo " -bios              the bios to use (default $UEFI_PATH)"
 	echo " -hda PATH          hard disk file (default $HDA)"
 	echo " -mem MEM           guest memory size in MB (default $MEM)"
@@ -48,7 +46,7 @@ usage() {
 	echo "                    (Requires that QEMU is built on a host that supports libslirp-dev 4.7 or newer)"
 	echo " -monitor PATH      Path to QEMU monitor socket (default: $MONITOR_PATH)"
 	echo " -log PATH          Path to QEMU console log (default: $QEMU_CONSOLE_LOG)"
-	echo " -certs PATH        Path to SNP certificate blob for guest (default: none)"
+	echo " -dry               Print generated command-line but don't launch the guest"
 	echo " -vnc PORT	  VNC port to use"
 	exit 1
 }
@@ -104,9 +102,6 @@ while [ -n "$1" ]; do
 				SEV_ES="1"
 				SEV="1"
 				;;
-		-enable-discard)
-				DISCARD="both"
-				;;
 		-sev-es)	SEV_ES="1"
 				SEV="1"
 				;;
@@ -150,14 +145,14 @@ while [ -n "$1" ]; do
 		-log)           QEMU_CONSOLE_LOG="$2"
 				shift
 				;;
+		-dry)   DRY="1"
+				shift
+				;;
 		-vnc)		VNC="$2"
 				shift
 				if [ "$VNC" = "" ]; then
 					usage
 				fi
-				;;
-		-certs) CERTS_PATH="$2"
-				shift
 				;;
 		*) 		usage
 				;;
@@ -196,7 +191,7 @@ QEMU_EXE="$(readlink -e $TMP)"
 }
 
 TMP="$UEFI_PATH/OVMF_CODE.fd"
-if [ "${SEV_SNP}" = 1 ]; then
+if [ -n "${SEV_SNP}" ]; then
 	TMP="$UEFI_PATH/OVMF.fd"
 fi
 UEFI_CODE="$(readlink -e $TMP)"
@@ -217,7 +212,7 @@ UEFI_CODE="$(readlink -e $TMP)"
 }
 UEFI_VARS="$(readlink -e ./$GUEST_NAME.fd)"
 
-if [ "$ALLOW_DEBUG" = "1" ]; then
+if [ -n "${ALLOW_DEBUG}" ]; then
 	# This will dump all the VMCB on VM exit
 	echo 1 > /sys/module/kvm_amd/parameters/dump_all_vmcbs
 
@@ -251,7 +246,7 @@ add_opts "-no-reboot"
 # The OVMF binary, including the non-volatile variable store, appears as a
 # "normal" qemu drive on the host side, and it is exposed to the guest as a
 # persistent flash device.
-if [ "${SEV_SNP}" = 1 ]; then
+if [ -n "${SEV_SNP}" ]; then
     add_opts "-bios ${UEFI_CODE}"
 else
     add_opts "-drive if=pflash,format=raw,unit=0,file=${UEFI_CODE},readonly"
@@ -265,15 +260,10 @@ fi
 # distros like Ubuntu 20.04 still only provide 4.1, so only enable
 # usermode network if specifically requested.
 if [ "$USE_DEFAULT_NETWORK" = "1" ]; then
-    #echo "guest port 22 is fwd to host 8000..."
-    #add_opts "-netdev user,id=vmnic,hostfwd=tcp::8000-:22 -device e1000,netdev=vmnic,romfile="
-    #add_opts "-netdev user,id=vmnic"
-    #add_opts " -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile="
-
-    # Create a user-mode networking backend and then setup port
-    # forwarding from host->guest.
-    add_opts "-netdev user,id=vmnic,hostfwd=tcp::2222-:22"
-    add_opts "-device virtio-net-pci,netdev=vmnic"
+   echo "guest port 22 is fwd to host 8000..."
+   add_opts "-netdev user,id=vmnic,hostfwd=tcp::8000-:22 -device e1000,netdev=vmnic,romfile="
+#    add_opts "-netdev user,id=vmnic"
+#    add_opts " -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile="
 fi
 
 # If harddisk file is specified then add the HDD drive
@@ -296,11 +286,11 @@ if [ -n "${HDA}" ]; then
 fi
 
 # If this is SEV guest then add the encryption device objects to enable support
-if [ ${SEV} = "1" ]; then
-	add_opts "-machine memory-encryption=sev0,vmport=off" 
+if [ -n "${SEV}" ]; then
+	add_opts "-machine confidential-guest-support=sev0,vmport=off"
 	get_cbitpos
 
-	if [ "${SEV_SNP}" = 1 ]; then
+	if [ -n "${SEV_SNP}" ]; then
 		POLICY=$((0x30000))
 		[ -n "${ALLOW_DEBUG}" ] && POLICY=$((POLICY | 0x80000))
 
@@ -308,11 +298,7 @@ if [ ${SEV} = "1" ]; then
 
 		add_opts "-object memory-backend-memfd,id=ram1,size=${MEM}M,share=true,prealloc=false"
 		add_opts "-machine memory-backend=ram1"
-		if [ "${CERTS_PATH}" != "" ]; then
-			add_opts "-object sev-snp-guest,id=sev0,policy=${POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1,certs-path=${CERTS_PATH}"
-		else
-			add_opts "-object sev-snp-guest,id=sev0,policy=${POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1"
-		fi
+		add_opts "-object sev-snp-guest,id=sev0,policy=${POLICY},cbitpos=${CBITPOS},reduced-phys-bits=1"
 	else
 		POLICY=$((0x01))
 		[ -n "${SEV_ES}" ] && POLICY=$((POLICY | 0x04))
@@ -342,20 +328,21 @@ else
 	add_opts "-vga ${CONSOLE}"
 fi
 
-# start VNC server
+# start vnc server
 [ -n "${VNC}" ] && add_opts "-vnc :${VNC}" && echo "Starting VNC on port ${VNC}"
 
 # start monitor on pty and named socket 'monitor'
 add_opts "-monitor pty -monitor unix:${MONITOR_PATH},server,nowait"
+add_opts "-netdev tap,id=vmnic,ifname=tap0,script=no,downscript=no"
+add_opts "-device virtio-net-pci,netdev=vmnic"
 
 # save the command line args into log file
 cat $QEMU_CMDLINE | tee ${QEMU_CONSOLE_LOG}
 echo | tee -a ${QEMU_CONSOLE_LOG}
 
-touch /tmp/events
-echo "memory_device_*" >/tmp/events
-echo "*dimm_*" >> /tmp/events
-add_opts "-trace events=/tmp/events"
+#touch /tmp/events
+#add_opts "-trace events=/tmp/events"
+add_opts "-trace enable=kvm_convert_memory,file=/tmp/trace.out"
 
 # map CTRL-C to CTRL ]
 echo "Mapping CTRL-C to CTRL-]"
@@ -364,7 +351,9 @@ stty intr ^]
 echo "Launching VM ..."
 echo "  $QEMU_CMDLINE"
 sleep 1
-bash ${QEMU_CMDLINE} 2>&1 | tee -a ${QEMU_CONSOLE_LOG}
+if [ -z $DRY ]; then
+	bash ${QEMU_CMDLINE} 2>&1 | tee -a ${QEMU_CONSOLE_LOG}
+fi
 
 # restore the mapping
 stty intr ^c
